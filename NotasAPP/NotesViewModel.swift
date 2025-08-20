@@ -8,6 +8,9 @@ class NotesViewModel: ObservableObject {
             saveNotes()
         }
     }
+    @Published var selectedCategory: NoteCategory? = nil
+    @Published var searchText: String = ""
+    @Published var selectedTags: Set<String> = []
     
     private let notesKey = "notes_key"
     
@@ -16,8 +19,70 @@ class NotesViewModel: ObservableObject {
         requestNotificationPermission()
     }
     
-    func addNote(title: String, content: String, isBold: Bool = false, isItalic: Bool = false, fontStyle: FontStyle = .system, reminderDate: Date? = nil) {
-        var newNote = Note(title: title, content: content, isBold: isBold, isItalic: isItalic, fontStyle: fontStyle)
+    // MARK: - Computed Properties for Filtering
+    
+    var filteredNotes: [Note] {
+        var filtered = notes
+        
+        // Filtrar por categoría
+        if let selectedCategory = selectedCategory {
+            filtered = filtered.filter { $0.category == selectedCategory }
+        }
+        
+        // Filtrar por texto de búsqueda
+        if !searchText.isEmpty {
+            filtered = filtered.filter { note in
+                note.title.localizedCaseInsensitiveContains(searchText) ||
+                note.content.localizedCaseInsensitiveContains(searchText) ||
+                note.tags.contains { $0.localizedCaseInsensitiveContains(searchText) }
+            }
+        }
+        
+        // Filtrar por tags seleccionados
+        if !selectedTags.isEmpty {
+            filtered = filtered.filter { note in
+                !Set(note.tags).isDisjoint(with: selectedTags)
+            }
+        }
+        
+        return filtered.sorted { $0.date > $1.date }
+    }
+    
+    var availableTags: [String] {
+        let allTags = notes.flatMap { $0.tags }
+        return Array(Set(allTags)).sorted()
+    }
+    
+    var notesCountByCategory: [NoteCategory: Int] {
+        var counts: [NoteCategory: Int] = [:]
+        for category in NoteCategory.allCases {
+            counts[category] = notes.filter { $0.category == category }.count
+        }
+        return counts
+    }
+    
+    // MARK: - Category and Tags Management
+    
+    func setSelectedCategory(_ category: NoteCategory?) {
+        selectedCategory = category
+    }
+    
+    func toggleTag(_ tag: String) {
+        if selectedTags.contains(tag) {
+            selectedTags.remove(tag)
+        } else {
+            selectedTags.insert(tag)
+        }
+    }
+    
+    func clearFilters() {
+        selectedCategory = nil
+        searchText = ""
+        selectedTags.removeAll()
+    }
+    
+    func addNote(title: String, content: String, isBold: Bool = false, isItalic: Bool = false, fontStyle: FontStyle = .system, reminderDate: Date? = nil, category: NoteCategory = .general, tags: [String] = []) {
+        var newNote = Note(title: title, content: content, isBold: isBold, isItalic: isItalic, fontStyle: fontStyle, category: category, tags: tags)
         
         if let reminderDate = reminderDate {
             newNote.hasReminder = true
@@ -29,7 +94,7 @@ class NotesViewModel: ObservableObject {
         notes.append(newNote)
     }
     
-    func updateNote(id: UUID, newTitle: String, newContent: String, isBold: Bool? = nil, isItalic: Bool? = nil, fontStyle: FontStyle? = nil, reminderDate: Date? = nil, reminderEnabled: Bool? = nil) {
+    func updateNote(id: UUID, newTitle: String, newContent: String, isBold: Bool? = nil, isItalic: Bool? = nil, fontStyle: FontStyle? = nil, reminderDate: Date? = nil, reminderEnabled: Bool? = nil, category: NoteCategory? = nil, tags: [String]? = nil) {
         if let index = notes.firstIndex(where: { $0.id == id }) {
             // Cancelar notificación anterior si existe
             if notes[index].hasReminder {
@@ -41,6 +106,8 @@ class NotesViewModel: ObservableObject {
             if let isBold = isBold { notes[index].isBold = isBold }
             if let isItalic = isItalic { notes[index].isItalic = isItalic }
             if let fontStyle = fontStyle { notes[index].fontStyle = fontStyle }
+            if let category = category { notes[index].category = category }
+            if let tags = tags { notes[index].tags = tags }
             
             // Actualizar recordatorio
             if let reminderDate = reminderDate {

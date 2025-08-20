@@ -50,6 +50,7 @@ struct NotesListView: View {
     @Binding var showingSettings: Bool
     @Binding var showingAddNote: Bool
     @State private var selectedNote: Note?
+    @State private var showingCategoryFilter = false
     @Environment(\.colorScheme) private var currentColorScheme
     
     var body: some View {
@@ -67,7 +68,7 @@ struct NotesListView: View {
                 .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
-                    // Header personalizado con título y botón de configuraciones
+                    // Header personalizado con título y botones
                     HStack {
                         Text("Mis Notas")
                             .font(.largeTitle)
@@ -75,7 +76,20 @@ struct NotesListView: View {
                         
                         Spacer()
                         
-                        // Solo botón de configuraciones
+                        // Botón de filtros por categoría
+                        Button(action: { showingCategoryFilter.toggle() }) {
+                            Image(systemName: viewModel.selectedCategory != nil ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                                .font(.title2)
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.green, .blue],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        }
+                        
+                        // Botón de configuraciones
                         Button(action: { showingSettings = true }) {
                             Image(systemName: "gearshape.fill")
                                 .font(.title2)
@@ -90,21 +104,49 @@ struct NotesListView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 10)
-                    .padding(.bottom, 20)
+                    
+                    // Barra de búsqueda
+                    SearchBar(text: $viewModel.searchText)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 10)
+                    
+                    // Filtros de categorías (cuando está visible)
+                    if showingCategoryFilter {
+                        CategoryFilterView(viewModel: viewModel)
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 10)
+                    }
+                    
+                    // Indicador de filtros activos
+                    ActiveFiltersView(viewModel: viewModel)
+                        .padding(.horizontal, 20)
                     
                     // Lista de notas o estado vacío
-                    if viewModel.notes.isEmpty {
-                        EmptyStateView()
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if viewModel.filteredNotes.isEmpty {
+                        if viewModel.notes.isEmpty {
+                            EmptyStateView()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            EmptyFilterStateView()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
                     } else {
                         ScrollView {
                             LazyVStack(spacing: 16) {
-                                ForEach(viewModel.notes) { note in
+                                ForEach(viewModel.filteredNotes) { note in
                                     NoteCard(note: note) {
                                         selectedNote = note
                                     }
                                 }
-                                .onDelete(perform: viewModel.deleteNote)
+                                .onDelete { indexSet in
+                                    // Convertir índices de filteredNotes a índices de notes
+                                    let notesToDelete = indexSet.map { viewModel.filteredNotes[$0] }
+                                    for note in notesToDelete {
+                                        if let index = viewModel.notes.firstIndex(where: { $0.id == note.id }) {
+                                            viewModel.deleteNote(at: IndexSet(integer: index))
+                                        }
+                                    }
+                                }
                             }
                             .padding(.horizontal, 20)
                             .padding(.bottom, 100) // Espacio para el botón flotante
@@ -382,7 +424,7 @@ struct CalendarView: View {
                                 .padding(16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(.regularMaterial)
+                                        .fill(Material.regularMaterial)
                                         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                                 )
                             } else {
@@ -396,7 +438,7 @@ struct CalendarView: View {
                                 }
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(.regularMaterial)
+                                        .fill(Material.regularMaterial)
                                         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                                 )
                             }
@@ -494,7 +536,7 @@ struct ReminderCard: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(.regularMaterial)
+                .fill(Material.regularMaterial)
                 .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
         )
     }
@@ -573,6 +615,28 @@ struct NoteCard: View {
                         .foregroundColor(.secondary)
                         .lineLimit(2)
                     
+                    // Categoría y tags
+                    HStack(spacing: 8) {
+                        // Categoría
+                        CategoryBadge(category: note.category)
+                        
+                        // Tags (máximo 2 visibles)
+                        if !note.tags.isEmpty {
+                            ForEach(Array(note.tags.prefix(2)), id: \.self) { tag in
+                                TagBadge(tag: tag)
+                            }
+                            
+                            if note.tags.count > 2 {
+                                Text("+\(note.tags.count - 2)")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 4)
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                    
                     HStack {
                         Image(systemName: "calendar")
                             .font(.caption)
@@ -615,7 +679,7 @@ struct NoteCard: View {
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(.regularMaterial)
+                    .fill(Material.regularMaterial)
                     .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
             )
         }
@@ -632,6 +696,9 @@ struct AddNoteView: View {
     @State private var selectedFont: FontStyle = .system
     @State private var hasReminder = false
     @State private var reminderDate = Date()
+    @State private var selectedCategory: NoteCategory = .general
+    @State private var tags: [String] = []
+    @State private var newTag = ""
     @FocusState private var titleIsFocused: Bool
     
     var body: some View {
@@ -686,7 +753,7 @@ struct AddNoteView: View {
                                 .padding(16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(.regularMaterial)
+                                        .fill(Material.regularMaterial)
                                         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                                 )
                         }
@@ -710,7 +777,7 @@ struct AddNoteView: View {
                                 .padding(16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(.regularMaterial)
+                                        .fill(Material.regularMaterial)
                                         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                                 )
                         }
@@ -807,7 +874,7 @@ struct AddNoteView: View {
                             .padding(16)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(.regularMaterial)
+                                    .fill(Material.regularMaterial)
                                     .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                             )
                         }
@@ -820,6 +887,74 @@ struct AddNoteView: View {
                                 Text("Recordatorio")
                                     .font(.headline)
                                     .fontWeight(.semibold)
+                            }
+                            
+                            // Sección de categoría
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Categoría")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                
+                                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 8) {
+                                    ForEach(NoteCategory.allCases, id: \.self) { category in
+                                        CategorySelectionCard(
+                                            category: category,
+                                            isSelected: selectedCategory == category,
+                                            action: { selectedCategory = category }
+                                        )
+                                    }
+                                }
+                            }
+                            
+                            // Sección de tags
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Etiquetas")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                
+                                // Tags existentes
+                                if !tags.isEmpty {
+                                    FlexibleView(data: tags, spacing: 8, alignment: .leading) { tag in
+                                        HStack(spacing: 4) {
+                                            Text("#\(tag)")
+                                                .font(.caption)
+                                                .fontWeight(.medium)
+                                            
+                                            Button(action: {
+                                                tags.removeAll { $0 == tag }
+                                            }) {
+                                                Image(systemName: "xmark")
+                                                    .font(.caption2)
+                                            }
+                                        }
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(
+                                            Capsule()
+                                                .fill(.blue.opacity(0.15))
+                                                .stroke(.blue.opacity(0.3), lineWidth: 0.5)
+                                        )
+                                        .foregroundColor(.blue)
+                                    }
+                                }
+                                
+                                // Agregar nuevo tag
+                                HStack {
+                                    TextField("Agregar etiqueta...", text: $newTag)
+                                        .textFieldStyle(.plain)
+                                        .onSubmit {
+                                            addTag()
+                                        }
+                                    
+                                    Button("Agregar", action: addTag)
+                                        .disabled(newTag.trimmingCharacters(in: .whitespaces).isEmpty)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(.secondary.opacity(0.3), lineWidth: 1)
+                                )
                             }
                             
                             Toggle(isOn: $hasReminder) {
@@ -863,7 +998,7 @@ struct AddNoteView: View {
                         .padding(16)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(.regularMaterial)
+                                .fill(Material.regularMaterial)
                                 .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                         )
                         }
@@ -896,7 +1031,9 @@ struct AddNoteView: View {
                             isBold: isBold,
                             isItalic: isItalic,
                             fontStyle: selectedFont,
-                            reminderDate: hasReminder ? reminderDate : nil
+                            reminderDate: hasReminder ? reminderDate : nil,
+                            category: selectedCategory,
+                            tags: tags
                         )
                         dismiss()
                     }
@@ -923,7 +1060,15 @@ struct AddNoteView: View {
                 titleIsFocused = true
             }
         }
+    
+    private func addTag() {
+        let trimmedTag = newTag.trimmingCharacters(in: .whitespaces)
+        if !trimmedTag.isEmpty && !tags.contains(trimmedTag) {
+            tags.append(trimmedTag)
+            newTag = ""
+        }
     }
+}
 
 struct EditNoteView: View {
     @Environment(\.dismiss) private var dismiss
@@ -936,6 +1081,9 @@ struct EditNoteView: View {
     @State private var selectedFont: FontStyle
     @State private var hasReminder: Bool
     @State private var reminderDate: Date
+    @State private var selectedCategory: NoteCategory
+    @State private var tags: [String]
+    @State private var newTag = ""
     
     init(viewModel: NotesViewModel, note: Note) {
         self.viewModel = viewModel
@@ -947,6 +1095,8 @@ struct EditNoteView: View {
         _selectedFont = State(initialValue: note.fontStyle)
         _hasReminder = State(initialValue: note.hasReminder)
         _reminderDate = State(initialValue: note.reminderDate ?? Date())
+        _selectedCategory = State(initialValue: note.category)
+        _tags = State(initialValue: note.tags)
     }
     
     var body: some View {
@@ -1000,7 +1150,7 @@ struct EditNoteView: View {
                                 .padding(16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(.regularMaterial)
+                                        .fill(Material.regularMaterial)
                                         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                                 )
                         }
@@ -1092,7 +1242,7 @@ struct EditNoteView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .background(
                                         RoundedRectangle(cornerRadius: 8)
-                                            .fill(.regularMaterial)
+                                            .fill(Material.regularMaterial)
                                     )
                             }
                         }
@@ -1116,7 +1266,7 @@ struct EditNoteView: View {
                                 .padding(16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(.regularMaterial)
+                                        .fill(Material.regularMaterial)
                                         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                                 )
                         }
@@ -1130,6 +1280,74 @@ struct EditNoteView: View {
                             Text("Recordatorio")
                                 .font(.headline)
                                 .fontWeight(.semibold)
+                        }
+                        
+                        // Sección de categoría
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Categoría")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 8) {
+                                ForEach(NoteCategory.allCases, id: \.self) { category in
+                                    CategorySelectionCard(
+                                        category: category,
+                                        isSelected: selectedCategory == category,
+                                        action: { selectedCategory = category }
+                                    )
+                                }
+                            }
+                        }
+                        
+                        // Sección de tags
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Etiquetas")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            
+                            // Tags existentes
+                            if !tags.isEmpty {
+                                FlexibleView(data: tags, spacing: 8, alignment: .leading) { tag in
+                                    HStack(spacing: 4) {
+                                        Text("#\(tag)")
+                                            .font(.caption)
+                                            .fontWeight(.medium)
+                                        
+                                        Button(action: {
+                                            tags.removeAll { $0 == tag }
+                                        }) {
+                                            Image(systemName: "xmark")
+                                                .font(.caption2)
+                                        }
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        Capsule()
+                                            .fill(.blue.opacity(0.15))
+                                            .stroke(.blue.opacity(0.3), lineWidth: 0.5)
+                                    )
+                                    .foregroundColor(.blue)
+                                }
+                            }
+                            
+                            // Agregar nuevo tag
+                            HStack {
+                                TextField("Agregar etiqueta...", text: $newTag)
+                                    .textFieldStyle(.plain)
+                                    .onSubmit {
+                                        addTag()
+                                    }
+                                
+                                Button("Agregar", action: addTag)
+                                    .disabled(newTag.trimmingCharacters(in: .whitespaces).isEmpty)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(.secondary.opacity(0.3), lineWidth: 1)
+                            )
                         }
                         
                         Toggle(isOn: $hasReminder) {
@@ -1173,7 +1391,7 @@ struct EditNoteView: View {
                     .padding(16)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(.regularMaterial)
+                            .fill(Material.regularMaterial)
                             .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                     )
                     
@@ -1206,7 +1424,9 @@ struct EditNoteView: View {
                             isItalic: isItalic,
                             fontStyle: selectedFont,
                             reminderDate: hasReminder ? reminderDate : nil,
-                            reminderEnabled: hasReminder
+                            reminderEnabled: hasReminder,
+                            category: selectedCategory,
+                            tags: tags
                         )
                         dismiss()
                     }
@@ -1229,6 +1449,14 @@ struct EditNoteView: View {
                     .fontWeight(.semibold)
                 }
             }
+        }
+    }
+    
+    private func addTag() {
+        let trimmedTag = newTag.trimmingCharacters(in: .whitespaces)
+        if !trimmedTag.isEmpty && !tags.contains(trimmedTag) {
+            tags.append(trimmedTag)
+            newTag = ""
         }
     }
 }
@@ -1305,7 +1533,7 @@ struct SettingsView: View {
                                 .padding(16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(.regularMaterial)
+                                        .fill(Material.regularMaterial)
                                         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                                 )
                                 
@@ -1328,7 +1556,7 @@ struct SettingsView: View {
                                     .padding(16)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(.regularMaterial)
+                                            .fill(Material.regularMaterial)
                                             .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                                     )
                                 }
@@ -1377,7 +1605,7 @@ struct SettingsView: View {
                             .padding(16)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(.regularMaterial)
+                                    .fill(Material.regularMaterial)
                                     .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                             )
                         }
@@ -1539,7 +1767,7 @@ struct CustomCalendarView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(.regularMaterial)
+                .fill(Material.regularMaterial)
                 .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
         )
         .onAppear {
@@ -1631,4 +1859,427 @@ struct DayView: View {
             selectedDate = date
         }
     }
+}
+
+// MARK: - Search Bar
+struct SearchBar: View {
+    @Binding var text: String
+    
+    var body: some View {
+        HStack {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.secondary)
+            
+            TextField("Buscar notas...", text: $text)
+                .textFieldStyle(.plain)
+            
+            if !text.isEmpty {
+                Button(action: { text = "" }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Material.regularMaterial)
+                .stroke(.secondary.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Category Filter View
+struct CategoryFilterView: View {
+    @ObservedObject var viewModel: NotesViewModel
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                // Botón "Todas"
+                CategoryFilterChip(
+                    title: "Todas",
+                    icon: "square.grid.2x2",
+                    color: "gray",
+                    count: viewModel.notes.count,
+                    isSelected: viewModel.selectedCategory == nil,
+                    action: { viewModel.setSelectedCategory(nil) }
+                )
+                
+                // Botones de categorías
+                ForEach(NoteCategory.allCases, id: \.self) { category in
+                    let count = viewModel.notesCountByCategory[category] ?? 0
+                    CategoryFilterChip(
+                        title: category.displayName,
+                        icon: category.icon,
+                        color: category.color,
+                        count: count,
+                        isSelected: viewModel.selectedCategory == category,
+                        action: { 
+                            viewModel.setSelectedCategory(
+                                viewModel.selectedCategory == category ? nil : category
+                            )
+                        }
+                    )
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
+// MARK: - Category Filter Chip
+struct CategoryFilterChip: View {
+    let title: String
+    let icon: String
+    let color: String
+    let count: Int
+    let isSelected: Bool
+    let action: () -> Void
+    
+    private var chipColor: Color {
+        switch color {
+        case "gray": return .gray
+        case "blue": return .blue
+        case "green": return .green
+        case "purple": return .purple
+        case "red": return .red
+        case "orange": return .orange
+        case "cyan": return .cyan
+        case "yellow": return .yellow
+        case "pink": return .pink
+        case "indigo": return .indigo
+        default: return .gray
+        }
+    }
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.caption)
+                
+                Text(title)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                
+                Text("(\(count))")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(isSelected ? chipColor.opacity(0.2) : Color.secondary.opacity(0.1))
+                    .stroke(isSelected ? chipColor : .secondary.opacity(0.3), lineWidth: 1)
+            )
+            .foregroundColor(isSelected ? chipColor : .primary)
+        }
+    }
+}
+
+// MARK: - Active Filters View
+struct ActiveFiltersView: View {
+    @ObservedObject var viewModel: NotesViewModel
+    
+    var body: some View {
+        if viewModel.selectedCategory != nil || !viewModel.searchText.isEmpty || !viewModel.selectedTags.isEmpty {
+            HStack(spacing: 8) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                Text("Filtros activos:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                if let category = viewModel.selectedCategory {
+                    ActiveFilterTag(text: category.displayName, color: category.color) {
+                        viewModel.setSelectedCategory(nil)
+                    }
+                }
+                
+                if !viewModel.searchText.isEmpty {
+                    ActiveFilterTag(text: "Búsqueda: \(viewModel.searchText)", color: "blue") {
+                        viewModel.searchText = ""
+                    }
+                }
+                
+                Spacer()
+                
+                Button("Limpiar", action: viewModel.clearFilters)
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+            .padding(.vertical, 8)
+        }
+    }
+}
+
+// MARK: - Active Filter Tag
+struct ActiveFilterTag: View {
+    let text: String
+    let color: String
+    let onRemove: () -> Void
+    
+    private var tagColor: Color {
+        switch color {
+        case "gray": return .gray
+        case "blue": return .blue
+        case "green": return .green
+        case "purple": return .purple
+        case "red": return .red
+        case "orange": return .orange
+        case "cyan": return .cyan
+        case "yellow": return .yellow
+        case "pink": return .pink
+        case "indigo": return .indigo
+        default: return .gray
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(text)
+                .font(.caption2)
+                .lineLimit(1)
+            
+            Button(action: onRemove) {
+                Image(systemName: "xmark")
+                    .font(.caption2)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(tagColor.opacity(0.2))
+                .stroke(tagColor.opacity(0.5), lineWidth: 1)
+        )
+        .foregroundColor(tagColor)
+    }
+}
+
+// MARK: - Empty Filter State View
+struct EmptyFilterStateView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 60))
+                .foregroundColor(.secondary)
+            
+            VStack(spacing: 8) {
+                Text("No se encontraron notas")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                
+                Text("Intenta ajustar los filtros o la búsqueda")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(40)
+    }
+}
+
+// MARK: - Category Badge
+struct CategoryBadge: View {
+    let category: NoteCategory
+    
+    private var categoryColor: Color {
+        switch category.color {
+        case "gray": return .gray
+        case "blue": return .blue
+        case "green": return .green
+        case "purple": return .purple
+        case "red": return .red
+        case "orange": return .orange
+        case "cyan": return .cyan
+        case "yellow": return .yellow
+        case "pink": return .pink
+        case "indigo": return .indigo
+        default: return .gray
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: category.icon)
+                .font(.caption2)
+            Text(category.displayName)
+                .font(.caption2)
+                .fontWeight(.medium)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(
+            Capsule()
+                .fill(categoryColor.opacity(0.15))
+                .stroke(categoryColor.opacity(0.3), lineWidth: 0.5)
+        )
+        .foregroundColor(categoryColor)
+    }
+}
+
+// MARK: - Tag Badge
+struct TagBadge: View {
+    let tag: String
+    
+    var body: some View {
+        Text("#\(tag)")
+            .font(.caption2)
+            .fontWeight(.medium)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(.blue.opacity(0.15))
+                    .stroke(.blue.opacity(0.3), lineWidth: 0.5)
+            )
+            .foregroundColor(.blue)
+    }
+}
+
+// MARK: - Category Selection Card
+struct CategorySelectionCard: View {
+    let category: NoteCategory
+    let isSelected: Bool
+    let action: () -> Void
+    
+    private var categoryColor: Color {
+        switch category.color {
+        case "gray": return .gray
+        case "blue": return .blue
+        case "green": return .green
+        case "purple": return .purple
+        case "red": return .red
+        case "orange": return .orange
+        case "cyan": return .cyan
+        case "yellow": return .yellow
+        case "pink": return .pink
+        case "indigo": return .indigo
+        default: return .gray
+        }
+    }
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: category.icon)
+                    .font(.title2)
+                    .foregroundColor(isSelected ? .white : categoryColor)
+                
+                Text(category.displayName)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(isSelected ? .white : .primary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 60)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isSelected ? categoryColor : categoryColor.opacity(0.1))
+                    .stroke(categoryColor, lineWidth: isSelected ? 0 : 1)
+            )
+        }
+    }
+}
+
+// MARK: - Flexible View (for tags layout)
+struct FlexibleView<Data: Collection, Content: View>: View where Data.Element: Hashable {
+    let data: Data
+    let spacing: CGFloat
+    let alignment: HorizontalAlignment
+    let content: (Data.Element) -> Content
+    @State private var availableWidth: CGFloat = 0
+
+    var body: some View {
+        ZStack(alignment: Alignment(horizontal: alignment, vertical: .center)) {
+            Color.clear
+                .frame(height: 1)
+                .readSize { size in
+                    availableWidth = size.width
+                }
+
+            FlexibleViewLayout(
+                data: data,
+                spacing: spacing,
+                availableWidth: availableWidth,
+                content: content
+            )
+        }
+    }
+}
+
+struct FlexibleViewLayout<Data: Collection, Content: View>: View where Data.Element: Hashable {
+    let data: Data
+    let spacing: CGFloat
+    let availableWidth: CGFloat
+    let content: (Data.Element) -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            ForEach(computeRows(), id: \.self) { rowData in
+                HStack(spacing: spacing) {
+                    ForEach(rowData, id: \.self) { item in
+                        content(item)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    func computeRows() -> [[Data.Element]] {
+        var rows: [[Data.Element]] = []
+        var currentRow: [Data.Element] = []
+        var currentRowWidth: CGFloat = 0
+
+        for item in data {
+            let itemWidth = estimateItemWidth(item)
+            let itemWithSpacing = itemWidth + (currentRow.isEmpty ? 0 : spacing)
+
+            if currentRowWidth + itemWithSpacing <= availableWidth {
+                currentRow.append(item)
+                currentRowWidth += itemWithSpacing
+            } else {
+                if !currentRow.isEmpty {
+                    rows.append(currentRow)
+                }
+                currentRow = [item]
+                currentRowWidth = itemWidth
+            }
+        }
+
+        if !currentRow.isEmpty {
+            rows.append(currentRow)
+        }
+
+        return rows
+    }
+
+    func estimateItemWidth(_ item: Data.Element) -> CGFloat {
+        return CGFloat(String(describing: item).count * 8 + 20)
+    }
+}
+
+extension View {
+    func readSize(onChange: @escaping (CGSize) -> Void) -> some View {
+        background(
+            GeometryReader { geometry in
+                Color.clear
+                    .preference(key: SizePreferenceKey.self, value: geometry.size)
+            }
+        )
+        .onPreferenceChange(SizePreferenceKey.self, perform: onChange)
+    }
+}
+
+struct SizePreferenceKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {}
 }
