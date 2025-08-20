@@ -16,13 +16,27 @@ struct ContentView: View {
     @State private var selectedNote: Note?
     @State private var showingSettings = false
     @State private var settingsToggle = false
+    @State private var isDarkMode = false
+    @State private var useSystemTheme = true
+    @Environment(\.colorScheme) var systemColorScheme
+    
+    private var currentColorScheme: ColorScheme {
+        if useSystemTheme {
+            return systemColorScheme
+        } else {
+            return isDarkMode ? .dark : .light
+        }
+    }
     
     var body: some View {
         NavigationStack {
             ZStack {
-                // Fondo con gradiente
+                // Fondo con gradiente adaptativo
                 LinearGradient(
-                    gradient: Gradient(colors: [Color.purple.opacity(0.1), Color.blue.opacity(0.1)]),
+                    gradient: Gradient(colors: currentColorScheme == .dark ? 
+                        [Color.purple.opacity(0.2), Color.blue.opacity(0.2)] :
+                        [Color.purple.opacity(0.1), Color.blue.opacity(0.1)]
+                    ),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -123,9 +137,14 @@ struct ContentView: View {
                 EditNoteView(viewModel: viewModel, note: note)
             }
             .sheet(isPresented: $showingSettings) {
-                SettingsView(settingsToggle: $settingsToggle)
+                SettingsView(
+                    settingsToggle: $settingsToggle,
+                    isDarkMode: $isDarkMode,
+                    useSystemTheme: $useSystemTheme
+                )
             }
         }
+        .preferredColorScheme(useSystemTheme ? nil : (isDarkMode ? .dark : .light))
     }
 }
 
@@ -497,7 +516,10 @@ struct EditNoteView: View {
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) var systemColorScheme
     @Binding var settingsToggle: Bool
+    @Binding var isDarkMode: Bool
+    @Binding var useSystemTheme: Bool
     
     var body: some View {
         NavigationStack {
@@ -535,6 +557,85 @@ struct SettingsView: View {
                     
                     // Sección de configuraciones
                     VStack(spacing: 20) {
+                        // Configuración de tema
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "moon.fill")
+                                    .foregroundColor(.indigo)
+                                Text("Configuración de Tema")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                            }
+                            
+                            VStack(spacing: 12) {
+                                // Toggle para usar tema del sistema
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Usar tema del sistema")
+                                            .font(.body)
+                                        Text("Detecta automáticamente el modo claro/oscuro")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Toggle("", isOn: $useSystemTheme)
+                                        .tint(.indigo)
+                                }
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(.regularMaterial)
+                                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                                )
+                                
+                                // Toggle para modo oscuro manual (solo si no usa tema del sistema)
+                                if !useSystemTheme {
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Modo oscuro")
+                                                .font(.body)
+                                            Text("Activar tema oscuro manualmente")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        Toggle("", isOn: $isDarkMode)
+                                            .tint(.purple)
+                                    }
+                                    .padding(16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(.regularMaterial)
+                                            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                                    )
+                                }
+                                
+                                // Indicador del tema actual
+                                HStack {
+                                    Image(systemName: useSystemTheme ? 
+                                        (systemColorScheme == .dark ? "moon.circle.fill" : "sun.max.circle.fill") :
+                                        (isDarkMode ? "moon.circle.fill" : "sun.max.circle.fill")
+                                    )
+                                    .foregroundColor(useSystemTheme ? 
+                                        (systemColorScheme == .dark ? .purple : .orange) :
+                                        (isDarkMode ? .purple : .orange)
+                                    )
+                                    
+                                    Text("Tema actual: \(useSystemTheme ? "Sistema (\(systemColorScheme == .dark ? "Oscuro" : "Claro"))" : (isDarkMode ? "Oscuro" : "Claro"))")
+                                        .font(.footnote)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 4)
+                            }
+                        }
+                        
+                        // Configuración de prueba original
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 Image(systemName: "lightbulb.fill")
