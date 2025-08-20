@@ -231,6 +231,27 @@ struct NoteCard: View {
                         
                         Spacer()
                         
+                        // Indicador de recordatorio
+                        if note.hasReminder && note.reminderEnabled {
+                            HStack(spacing: 4) {
+                                Image(systemName: "bell.badge.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                                if let reminderDate = note.reminderDate {
+                                    Text(reminderDate, style: .time)
+                                        .font(.caption2)
+                                        .foregroundColor(.orange)
+                                        .fontWeight(.medium)
+                                }
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule()
+                                    .fill(Color.orange.opacity(0.15))
+                            )
+                        }
+                        
                         Image(systemName: "chevron.right")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -258,6 +279,8 @@ struct AddNoteView: View {
     @State private var isBold = false
     @State private var isItalic = false
     @State private var selectedFont: FontStyle = .system
+    @State private var hasReminder = false
+    @State private var reminderDate = Date()
     @FocusState private var titleIsFocused: Bool
     
     var body: some View {
@@ -270,10 +293,11 @@ struct AddNoteView: View {
                 )
                 .ignoresSafeArea()
                 
-                VStack(spacing: 24) {
-                    // Header con icono
-                    VStack(spacing: 12) {
-                        RoundedRectangle(cornerRadius: 20)
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Header con icono
+                        VStack(spacing: 12) {
+                            RoundedRectangle(cornerRadius: 20)
                             .fill(
                                 LinearGradient(
                                     colors: [.green, .blue],
@@ -432,11 +456,70 @@ struct AddNoteView: View {
                                     .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                             )
                         }
+                        
+                        // Sección de recordatorio
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "bell.fill")
+                                    .foregroundColor(.orange)
+                                Text("Recordatorio")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                            }
+                            
+                            Toggle(isOn: $hasReminder) {
+                                HStack {
+                                    Image(systemName: hasReminder ? "bell.badge.fill" : "bell.slash.fill")
+                                        .foregroundColor(hasReminder ? .green : .gray)
+                                    Text("Programar recordatorio")
+                                        .font(.subheadline)
+                                }
+                            }
+                            .toggleStyle(SwitchToggleStyle(tint: .green))
+                            
+                            if hasReminder {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Fecha y hora")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    
+                                    DatePicker(
+                                        "Fecha del recordatorio",
+                                        selection: $reminderDate,
+                                        in: Date()...,
+                                        displayedComponents: [.date, .hourAndMinute]
+                                    )
+                                    .datePickerStyle(.compact)
+                                    .labelsHidden()
+                                    
+                                    HStack {
+                                        Image(systemName: "info.circle.fill")
+                                            .foregroundColor(.blue)
+                                            .font(.caption)
+                                        Text("Recibirás una notificación en la fecha seleccionada")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(.top, 4)
+                                }
+                                .padding(.top, 8)
+                            }
+                        }
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.regularMaterial)
+                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                        )
+                        }
                     }
                     
-                    Spacer()
+                    // Espaciado adicional al final para mejor UX
+                    Spacer(minLength: 100)
                 }
                 .padding(.horizontal, 24)
+                .padding(.top, 20)
+                }
             }
             .navigationTitle("🎨 Crear")
 #if os(iOS)
@@ -457,7 +540,8 @@ struct AddNoteView: View {
                             content: content,
                             isBold: isBold,
                             isItalic: isItalic,
-                            fontStyle: selectedFont
+                            fontStyle: selectedFont,
+                            reminderDate: hasReminder ? reminderDate : nil
                         )
                         dismiss()
                     }
@@ -485,7 +569,6 @@ struct AddNoteView: View {
             }
         }
     }
-}
 
 struct EditNoteView: View {
     @Environment(\.dismiss) private var dismiss
@@ -496,6 +579,8 @@ struct EditNoteView: View {
     @State private var isBold: Bool
     @State private var isItalic: Bool
     @State private var selectedFont: FontStyle
+    @State private var hasReminder: Bool
+    @State private var reminderDate: Date
     
     init(viewModel: NotesViewModel, note: Note) {
         self.viewModel = viewModel
@@ -505,6 +590,8 @@ struct EditNoteView: View {
         _isBold = State(initialValue: note.isBold)
         _isItalic = State(initialValue: note.isItalic)
         _selectedFont = State(initialValue: note.fontStyle)
+        _hasReminder = State(initialValue: note.hasReminder)
+        _reminderDate = State(initialValue: note.reminderDate ?? Date())
     }
     
     var body: some View {
@@ -517,10 +604,11 @@ struct EditNoteView: View {
                 )
                 .ignoresSafeArea()
                 
-                VStack(spacing: 24) {
-                    // Header con icono
-                    VStack(spacing: 12) {
-                        RoundedRectangle(cornerRadius: 20)
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Header con icono
+                        VStack(spacing: 12) {
+                            RoundedRectangle(cornerRadius: 20)
                             .fill(
                                 LinearGradient(
                                     colors: [.orange, .pink],
@@ -675,9 +763,67 @@ struct EditNoteView: View {
                         }
                     }
                     
-                    Spacer()
+                    // Sección de recordatorio
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "bell.fill")
+                                .foregroundColor(.orange)
+                            Text("Recordatorio")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                        }
+                        
+                        Toggle(isOn: $hasReminder) {
+                            HStack {
+                                Image(systemName: hasReminder ? "bell.badge.fill" : "bell.slash.fill")
+                                    .foregroundColor(hasReminder ? .green : .gray)
+                                Text("Programar recordatorio")
+                                    .font(.subheadline)
+                            }
+                        }
+                        .toggleStyle(SwitchToggleStyle(tint: .green))
+                        
+                        if hasReminder {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Fecha y hora")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                
+                                DatePicker(
+                                    "Fecha del recordatorio",
+                                    selection: $reminderDate,
+                                    in: Date()...,
+                                    displayedComponents: [.date, .hourAndMinute]
+                                )
+                                .datePickerStyle(.compact)
+                                .labelsHidden()
+                                
+                                HStack {
+                                    Image(systemName: "info.circle.fill")
+                                        .foregroundColor(.blue)
+                                        .font(.caption)
+                                    Text("Recibirás una notificación en la fecha seleccionada")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(.top, 4)
+                            }
+                            .padding(.top, 8)
+                        }
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(.regularMaterial)
+                            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    )
+                    
+                    // Espaciado adicional al final para mejor UX
+                    Spacer(minLength: 100)
                 }
                 .padding(.horizontal, 24)
+                .padding(.top, 20)
+                }
             }
             .navigationTitle("Editar")
 #if os(iOS)
@@ -699,7 +845,9 @@ struct EditNoteView: View {
                             newContent: content,
                             isBold: isBold,
                             isItalic: isItalic,
-                            fontStyle: selectedFont
+                            fontStyle: selectedFont,
+                            reminderDate: hasReminder ? reminderDate : nil,
+                            reminderEnabled: hasReminder
                         )
                         dismiss()
                     }

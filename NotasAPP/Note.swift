@@ -8,6 +8,9 @@ struct Note: Identifiable, Codable {
     var isBold: Bool = false
     var isItalic: Bool = false
     var fontStyle: FontStyle = .system
+    var hasReminder: Bool = false
+    var reminderDate: Date?
+    var reminderEnabled: Bool = false
 }
 
 enum FontStyle: String, CaseIterable, Codable {
