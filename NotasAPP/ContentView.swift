@@ -1,32 +1,56 @@
-//
-//  ContentView.swift
-//  NotasAPP
-//
-//  Created by Angel Santana on 19/08/25.
-//
-
 import SwiftUI
-#if canImport(UIKit)
-import UIKit
-#endif
 
 struct ContentView: View {
     @StateObject private var viewModel = NotesViewModel()
     @State private var showingAddNote = false
-    @State private var selectedNote: Note?
     @State private var showingSettings = false
+    @State private var selectedNote: Note?
     @State private var settingsToggle = false
     @State private var isDarkMode = false
     @State private var useSystemTheme = true
-    @Environment(\.colorScheme) var systemColorScheme
+    @Environment(\.colorScheme) private var currentColorScheme
     
-    private var currentColorScheme: ColorScheme {
-        if useSystemTheme {
-            return systemColorScheme
-        } else {
-            return isDarkMode ? .dark : .light
+    var body: some View {
+        TabView {
+            // Pestaña de Lista de Notas
+            NotesListView(viewModel: viewModel, showingSettings: $showingSettings, showingAddNote: $showingAddNote)
+                .tabItem {
+                    Image(systemName: "note.text")
+                    Text("Notas")
+                }
+            
+            // Pestaña de Calendario
+            CalendarView(viewModel: viewModel)
+                .tabItem {
+                    Image(systemName: "calendar")
+                    Text("Calendario")
+                }
         }
+        .accentColor(.purple)
+        .sheet(isPresented: $showingAddNote) {
+            AddNoteView(viewModel: viewModel)
+        }
+        .sheet(item: $selectedNote) { note in
+            EditNoteView(viewModel: viewModel, note: note)
+        }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView(
+                settingsToggle: $settingsToggle,
+                isDarkMode: $isDarkMode,
+                useSystemTheme: $useSystemTheme
+            )
+        }
+        .preferredColorScheme(useSystemTheme ? nil : (isDarkMode ? .dark : .light))
     }
+}
+
+// MARK: - Notes List View
+struct NotesListView: View {
+    @ObservedObject var viewModel: NotesViewModel
+    @Binding var showingSettings: Bool
+    @Binding var showingAddNote: Bool
+    @State private var selectedNote: Note?
+    @Environment(\.colorScheme) private var currentColorScheme
     
     var body: some View {
         NavigationStack {
@@ -68,35 +92,27 @@ struct ContentView: View {
                     .padding(.top, 10)
                     .padding(.bottom, 20)
                     
-                    // Contenido scrolleable
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            if viewModel.notes.isEmpty {
-                                EmptyStateView()
-                                    .padding(.top, 50)
-                            } else {
+                    // Lista de notas o estado vacío
+                    if viewModel.notes.isEmpty {
+                        EmptyStateView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 16) {
                                 ForEach(viewModel.notes) { note in
                                     NoteCard(note: note) {
                                         selectedNote = note
                                     }
-                                    .contextMenu {
-                                        Button(role: .destructive) {
-                                            if let index = viewModel.notes.firstIndex(where: { $0.id == note.id }) {
-                                                viewModel.deleteNote(at: IndexSet(integer: index))
-                                            }
-                                        } label: {
-                                            Label("Eliminar", systemImage: "trash")
-                                        }
-                                    }
                                 }
+                                .onDelete(perform: viewModel.deleteNote)
                             }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 100) // Espacio para el botón flotante
                         }
-                        .padding(.horizontal, 20)
                     }
                 }
-            }
-            .overlay(
-                // Botón flotante para agregar nota
+                
+                // Botón flotante para agregar nueva nota
                 VStack {
                     Spacer()
                     HStack {
@@ -112,39 +128,375 @@ struct ContentView: View {
                                     Circle()
                                         .fill(
                                             LinearGradient(
-                                                colors: [.purple, .blue],
+                                                colors: [.blue, .purple],
                                                 startPoint: .topLeading,
                                                 endPoint: .bottomTrailing
                                             )
                                         )
-                                        .shadow(color: .purple.opacity(0.3), radius: 8, x: 0, y: 4)
+                                        .shadow(color: .blue.opacity(0.3), radius: 10, x: 0, y: 5)
                                 )
                         }
                         .padding(.trailing, 20)
-                        .padding(.bottom, 30)
+                        .padding(.bottom, 20)
                     }
                 }
-            )
-#if os(iOS)
-            .navigationBarHidden(true)
-#else
-            .navigationTitle("")
-#endif
-            .sheet(isPresented: $showingAddNote) {
-                AddNoteView(viewModel: viewModel)
             }
             .sheet(item: $selectedNote) { note in
                 EditNoteView(viewModel: viewModel, note: note)
             }
-            .sheet(isPresented: $showingSettings) {
-                SettingsView(
-                    settingsToggle: $settingsToggle,
-                    isDarkMode: $isDarkMode,
-                    useSystemTheme: $useSystemTheme
-                )
+        }
+    }
+}
+
+// MARK: - Calendar View
+struct CompactReminderCard: View {
+    let note: Note
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(.orange.gradient)
+                .frame(width: 8, height: 8)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(note.title.isEmpty ? "Sin título" : note.title)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                
+                if let reminderDate = note.reminderDate {
+                    Text(reminderDate, style: .time)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.orange.opacity(0.1))
+                .stroke(.orange.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+struct HorizontalReminderCard: View {
+    let note: Note
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Encabezado con icono y título
+            HStack(spacing: 6) {
+                Image(systemName: "bell.badge.fill")
+                    .foregroundColor(.orange)
+                    .font(.caption)
+                
+                Text(note.title.isEmpty ? "Sin título" : note.title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+            }
+            
+            // Contenido de la nota (si existe)
+            if !note.content.isEmpty {
+                Text(note.content)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            
+            Spacer()
+            
+            // Información del recordatorio
+            if let reminderDate = note.reminderDate {
+                HStack(spacing: 4) {
+                    Image(systemName: "clock.fill")
+                        .foregroundColor(.blue)
+                        .font(.caption2)
+                    
+                    Text(reminderDate, style: .time)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
             }
         }
-        .preferredColorScheme(useSystemTheme ? nil : (isDarkMode ? .dark : .light))
+        .frame(width: 200, height: 100) // Ancho fijo para scroll horizontal
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.orange.opacity(0.1))
+                .stroke(.orange.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+struct ImprovedReminderCard: View {
+    let note: Note
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Encabezado con icono y título
+            HStack(spacing: 8) {
+                Image(systemName: "bell.badge.fill")
+                    .foregroundColor(.orange)
+                    .frame(width: 20)
+                
+                Text(note.title.isEmpty ? "Sin título" : note.title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                
+                Spacer()
+            }
+            
+            // Contenido de la nota (si existe)
+            if !note.content.isEmpty {
+                Text(note.content)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+            }
+            
+            // Información del recordatorio
+            if let reminderDate = note.reminderDate {
+                HStack(spacing: 8) {
+                    Image(systemName: "clock")
+                        .foregroundColor(.blue)
+                        .font(.caption)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(reminderDate, style: .time)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                        
+                        Text(reminderDate, style: .date)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.orange.opacity(0.1))
+                .stroke(.orange.opacity(0.2), lineWidth: 1)
+        )
+    }
+}
+
+struct CalendarView: View {
+    @ObservedObject var viewModel: NotesViewModel
+    @State private var selectedDate = Date()
+    @Environment(\.colorScheme) private var currentColorScheme
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                // Fondo con gradiente adaptativo
+                LinearGradient(
+                    gradient: Gradient(colors: currentColorScheme == .dark ? 
+                        [Color.green.opacity(0.2), Color.blue.opacity(0.2)] :
+                        [Color.green.opacity(0.1), Color.blue.opacity(0.1)]
+                    ),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+                
+                VStack(spacing: 20) {
+                    // Header
+                    HStack {
+                        Text("Calendario de Recordatorios")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                        
+                        Spacer()
+                        
+                        Image(systemName: "calendar.badge.clock")
+                            .font(.title2)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.green, .blue],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+                    
+                    // Contenido principal con diseño vertical
+                    VStack(spacing: 16) {
+                        // Calendario grande arriba (ocupa la mayor parte)
+                        VStack(spacing: 12) {
+                            HStack {
+                                Image(systemName: "calendar")
+                                    .foregroundColor(.blue)
+                                Text("Calendario")
+                                    .font(.title2)
+                                    .fontWeight(.semibold)
+                                Spacer()
+                            }
+                            
+                            // Calendario personalizado con indicadores
+                            CustomCalendarView(
+                                selectedDate: $selectedDate,
+                                datesWithReminders: getDatesWithReminders()
+                            )
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(maxHeight: .infinity) // Ocupa todo el espacio disponible
+                        
+                        // Lista de recordatorios abajo (sección compacta)
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "bell.fill")
+                                    .foregroundColor(.orange)
+                                Text("Recordatorios para \(selectedDate, formatter: dateFormatter)")
+                                    .font(.title3)
+                                    .fontWeight(.semibold)
+                                Spacer()
+                            }
+                            
+                            let remindersForDate = getRemindersForDate(selectedDate)
+                            
+                            if remindersForDate.isEmpty {
+                                HStack {
+                                    Image(systemName: "calendar.circle")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(.secondary)
+                                    Text("No hay recordatorios para esta fecha")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                }
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(.regularMaterial)
+                                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                                )
+                            } else {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 12) {
+                                        ForEach(remindersForDate) { note in
+                                            HorizontalReminderCard(note: note)
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                }
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(.regularMaterial)
+                                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                                )
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(maxHeight: 150) // Altura fija para la sección de recordatorios
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    Spacer()
+                }
+            }
+        }
+    }
+    
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .long
+        return formatter
+    }
+    
+    private func getRemindersForDate(_ date: Date) -> [Note] {
+        let calendar = Calendar.current
+        return viewModel.notes.filter { note in
+            guard let reminderDate = note.reminderDate,
+                  note.hasReminder && note.reminderEnabled else {
+                return false
+            }
+            return calendar.isDate(reminderDate, inSameDayAs: date)
+        }
+    }
+    
+    // Función para verificar si una fecha tiene recordatorios
+    private func hasReminders(for date: Date) -> Bool {
+        let calendar = Calendar.current
+        return viewModel.notes.contains { note in
+            guard note.hasReminder,
+                  note.reminderEnabled,
+                  let reminderDate = note.reminderDate else { return false }
+            return calendar.isDate(reminderDate, inSameDayAs: date)
+        }
+    }
+    
+    // Obtener todas las fechas con recordatorios
+    private func getDatesWithReminders() -> Set<Date> {
+        let calendar = Calendar.current
+        var dates = Set<Date>()
+        
+        for note in viewModel.notes {
+            if note.hasReminder,
+               note.reminderEnabled,
+               let reminderDate = note.reminderDate {
+                // Normalizar la fecha al inicio del día
+                let normalizedDate = calendar.startOfDay(for: reminderDate)
+                dates.insert(normalizedDate)
+            }
+        }
+        
+        return dates
+    }
+}
+
+// MARK: - Reminder Card
+struct ReminderCard: View {
+    let note: Note
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "bell.badge.fill")
+                    .foregroundColor(.orange)
+                Text(note.title)
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                Spacer()
+                if let reminderDate = note.reminderDate {
+                    Text(reminderDate, style: .time)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color.orange.opacity(0.2))
+                        )
+                        .foregroundColor(.orange)
+                }
+            }
+            
+            Text(note.content)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .lineLimit(2)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.regularMaterial)
+                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+        )
     }
 }
 
@@ -270,7 +622,6 @@ struct NoteCard: View {
         .buttonStyle(PlainButtonStyle())
     }
 }
-
 struct AddNoteView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var viewModel: NotesViewModel
@@ -331,6 +682,7 @@ struct AddNoteView: View {
                             
                             TextField("Escribe un título genial...", text: $title)
                                 .focused($titleIsFocused)
+                                .textFieldStyle(.plain)
                                 .padding(16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
@@ -351,7 +703,10 @@ struct AddNoteView: View {
                             
                             TextField("¿Qué tienes en mente?", text: $content, axis: .vertical)
                                 .lineLimit(6, reservesSpace: true)
-                                .applyStyle(isBold: isBold, isItalic: isItalic, fontStyle: selectedFont)
+                                .font(selectedFont.font(size: 16))
+                                .fontWeight(isBold ? .bold : .regular)
+                                .italic(isItalic)
+                                .textFieldStyle(.plain)
                                 .padding(16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
@@ -641,6 +996,7 @@ struct EditNoteView: View {
                             }
                             
                             TextField("Título de la nota", text: $title)
+                                .textFieldStyle(.plain)
                                 .padding(16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
@@ -752,8 +1108,11 @@ struct EditNoteView: View {
                             }
                             
                             TextField("Contenido de la nota", text: $content, axis: .vertical)
-                                .applyStyle(isBold: isBold, isItalic: isItalic, fontStyle: selectedFont)
+                                .font(selectedFont.font(size: 16))
+                                .fontWeight(isBold ? .bold : .regular)
+                                .italic(isItalic)
                                 .lineLimit(6, reservesSpace: true)
+                                .textFieldStyle(.plain)
                                 .padding(16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
@@ -1088,4 +1447,188 @@ extension View {
 
 #Preview {
     ContentView()
+}
+
+// MARK: - Custom Calendar View
+struct CustomCalendarView: View {
+    @Binding var selectedDate: Date
+    let datesWithReminders: Set<Date>
+    @State private var currentMonth = Date()
+    
+    private var calendar: Calendar {
+        Calendar.current
+    }
+    
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter
+    }
+    
+    private var dayFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "d"
+        return formatter
+    }
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            // Header del mes
+            HStack {
+                Button(action: previousMonth) {
+                    Image(systemName: "chevron.left")
+                        .font(.title2)
+                        .foregroundColor(.blue)
+                }
+                
+                Spacer()
+                
+                Text(dateFormatter.string(from: currentMonth))
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                
+                Spacer()
+                
+                Button(action: nextMonth) {
+                    Image(systemName: "chevron.right")
+                        .font(.title2)
+                        .foregroundColor(.blue)
+                }
+            }
+            .padding(.horizontal)
+            
+            // Días de la semana
+            HStack {
+                ForEach(calendar.shortWeekdaySymbols, id: \.self) { day in
+                    Text(day)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.horizontal)
+            
+            // Grid de días
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
+                ForEach(daysInMonth(), id: \.self) { date in
+                    DayView(
+                        date: date,
+                        selectedDate: $selectedDate,
+                        hasReminder: hasReminder(for: date),
+                        isCurrentMonth: calendar.isDate(date, equalTo: currentMonth, toGranularity: .month)
+                    )
+                }
+            }
+            .padding(.horizontal)
+            
+            // Leyenda
+            HStack(spacing: 16) {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(.orange)
+                        .frame(width: 8, height: 8)
+                    Text("Con recordatorios")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.regularMaterial)
+                .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+        )
+        .onAppear {
+            currentMonth = selectedDate
+        }
+    }
+    
+    private func daysInMonth() -> [Date] {
+        guard let monthInterval = calendar.dateInterval(of: .month, for: currentMonth),
+              let monthFirstWeek = calendar.dateInterval(of: .weekOfYear, for: monthInterval.start),
+              let monthLastWeek = calendar.dateInterval(of: .weekOfYear, for: monthInterval.end - 1) else {
+            return []
+        }
+        
+        var days: [Date] = []
+        var currentDate = monthFirstWeek.start
+        
+        while currentDate <= monthLastWeek.end {
+            days.append(currentDate)
+            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate) ?? currentDate
+        }
+        
+        return days
+    }
+    
+    private func hasReminder(for date: Date) -> Bool {
+        let normalizedDate = calendar.startOfDay(for: date)
+        return datesWithReminders.contains(normalizedDate)
+    }
+    
+    private func previousMonth() {
+        currentMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth) ?? currentMonth
+    }
+    
+    private func nextMonth() {
+        currentMonth = calendar.date(byAdding: .month, value: 1, to: currentMonth) ?? currentMonth
+    }
+}
+
+// MARK: - Day View
+struct DayView: View {
+    let date: Date
+    @Binding var selectedDate: Date
+    let hasReminder: Bool
+    let isCurrentMonth: Bool
+    
+    private var calendar: Calendar {
+        Calendar.current
+    }
+    
+    private var isSelected: Bool {
+        calendar.isDate(date, inSameDayAs: selectedDate)
+    }
+    
+    private var isToday: Bool {
+        calendar.isDate(date, inSameDayAs: Date())
+    }
+    
+    var body: some View {
+        ZStack {
+            // Fondo del día
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isSelected ? .blue : .clear)
+                .frame(height: 40)
+            
+            VStack(spacing: 2) {
+                // Número del día
+                Text("\(calendar.component(.day, from: date))")
+                    .font(.system(size: 16, weight: isToday ? .bold : .medium))
+                    .foregroundColor(
+                        isSelected ? .white :
+                        isToday ? .blue :
+                        isCurrentMonth ? .primary : .secondary
+                    )
+                
+                // Indicador de recordatorio
+                if hasReminder {
+                    Circle()
+                        .fill(.orange)
+                        .frame(width: 6, height: 6)
+                } else {
+                    Circle()
+                        .fill(.clear)
+                        .frame(width: 6, height: 6)
+                }
+            }
+        }
+        .onTapGesture {
+            selectedDate = date
+        }
+    }
 }
