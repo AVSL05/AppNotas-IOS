@@ -212,13 +212,12 @@ struct NoteCard: View {
                 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(note.title)
-                        .font(.headline)
-                        .fontWeight(.semibold)
+                        .applyNoteStyle(isBold: note.isBold, isItalic: note.isItalic, fontStyle: note.fontStyle, size: 18)
                         .foregroundColor(.primary)
                         .lineLimit(1)
                     
                     Text(note.content)
-                        .font(.subheadline)
+                        .applyNoteStyle(isBold: note.isBold, isItalic: note.isItalic, fontStyle: note.fontStyle, size: 14)
                         .foregroundColor(.secondary)
                         .lineLimit(2)
                     
@@ -256,6 +255,9 @@ struct AddNoteView: View {
     @ObservedObject var viewModel: NotesViewModel
     @State private var title = ""
     @State private var content = ""
+    @State private var isBold = false
+    @State private var isItalic = false
+    @State private var selectedFont: FontStyle = .system
     @FocusState private var titleIsFocused: Bool
     
     var body: some View {
@@ -325,12 +327,110 @@ struct AddNoteView: View {
                             
                             TextField("¿Qué tienes en mente?", text: $content, axis: .vertical)
                                 .lineLimit(6, reservesSpace: true)
+                                .applyStyle(isBold: isBold, isItalic: isItalic, fontStyle: selectedFont)
                                 .padding(16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
                                         .fill(.regularMaterial)
                                         .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                                 )
+                        }
+                        
+                        // Controles de formato
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "textformat")
+                                    .foregroundColor(.purple)
+                                Text("Formato")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                            }
+                            
+                            VStack(spacing: 12) {
+                                // Botones de formato
+                                HStack(spacing: 15) {
+                                    Button(action: { isBold.toggle() }) {
+                                        HStack {
+                                            Image(systemName: "bold")
+                                            Text("Negrita")
+                                        }
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 8)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(isBold ? Color.purple.opacity(0.2) : Color.clear)
+                                                .stroke(Color.purple, lineWidth: isBold ? 2 : 1)
+                                        )
+                                        .foregroundColor(isBold ? .purple : .primary)
+                                    }
+                                    
+                                    Button(action: { isItalic.toggle() }) {
+                                        HStack {
+                                            Image(systemName: "italic")
+                                            Text("Cursiva")
+                                        }
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 8)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(isItalic ? Color.blue.opacity(0.2) : Color.clear)
+                                                .stroke(Color.blue, lineWidth: isItalic ? 2 : 1)
+                                        )
+                                        .foregroundColor(isItalic ? .blue : .primary)
+                                    }
+                                    
+                                    Spacer()
+                                }
+                                
+                                // Selector de fuente
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Fuente")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                    
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(spacing: 10) {
+                                            ForEach(FontStyle.allCases, id: \.self) { font in
+                                                Button(action: { selectedFont = font }) {
+                                                    Text(font.displayName)
+                                                        .font(font.font(size: 14))
+                                                        .padding(.horizontal, 12)
+                                                        .padding(.vertical, 6)
+                                                        .background(
+                                                            RoundedRectangle(cornerRadius: 6)
+                                                                .fill(selectedFont == font ? Color.green.opacity(0.2) : Color.clear)
+                                                                .stroke(Color.green, lineWidth: selectedFont == font ? 2 : 1)
+                                                        )
+                                                        .foregroundColor(selectedFont == font ? .green : .primary)
+                                                }
+                                            }
+                                        }
+                                        .padding(.horizontal, 4)
+                                    }
+                                }
+                                
+                                // Vista previa del texto
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Vista previa:")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Text(content.isEmpty ? "Ejemplo de texto con formato" : content)
+                                        .applyNoteStyle(isBold: isBold, isItalic: isItalic, fontStyle: selectedFont)
+                                        .padding(12)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(Color.gray.opacity(0.1))
+                                        )
+                                }
+                            }
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(.regularMaterial)
+                                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                            )
                         }
                     }
                     
@@ -352,7 +452,13 @@ struct AddNoteView: View {
                 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Guardar") {
-                        viewModel.addNote(title: title, content: content)
+                        viewModel.addNote(
+                            title: title, 
+                            content: content,
+                            isBold: isBold,
+                            isItalic: isItalic,
+                            fontStyle: selectedFont
+                        )
                         dismiss()
                     }
                     .disabled(title.isEmpty || content.isEmpty)
@@ -387,12 +493,18 @@ struct EditNoteView: View {
     let note: Note
     @State private var title: String
     @State private var content: String
+    @State private var isBold: Bool
+    @State private var isItalic: Bool
+    @State private var selectedFont: FontStyle
     
     init(viewModel: NotesViewModel, note: Note) {
         self.viewModel = viewModel
         self.note = note
         _title = State(initialValue: note.title)
         _content = State(initialValue: note.content)
+        _isBold = State(initialValue: note.isBold)
+        _isItalic = State(initialValue: note.isItalic)
+        _selectedFont = State(initialValue: note.fontStyle)
     }
     
     var body: some View {
@@ -449,6 +561,98 @@ struct EditNoteView: View {
                                 )
                         }
                         
+                        // Controles de formato
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "textformat")
+                                    .foregroundColor(.purple)
+                                Text("Formato del texto")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                            }
+                            
+                            // Botones de formato
+                            HStack(spacing: 16) {
+                                Button(action: { isBold.toggle() }) {
+                                    HStack {
+                                        Image(systemName: "bold")
+                                        Text("Negrita")
+                                            .font(.caption)
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(isBold ? 
+                                                  AnyShapeStyle(LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing)) :
+                                                  AnyShapeStyle(Color.gray.opacity(0.2)))
+                                    )
+                                    .foregroundColor(isBold ? .white : .primary)
+                                }
+                                
+                                Button(action: { isItalic.toggle() }) {
+                                    HStack {
+                                        Image(systemName: "italic")
+                                        Text("Cursiva")
+                                            .font(.caption)
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(isItalic ? 
+                                                  AnyShapeStyle(LinearGradient(colors: [.green, .blue], startPoint: .leading, endPoint: .trailing)) :
+                                                  AnyShapeStyle(Color.gray.opacity(0.2)))
+                                    )
+                                    .foregroundColor(isItalic ? .white : .primary)
+                                }
+                                
+                                Spacer()
+                            }
+                            
+                            // Selector de fuente
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Estilo de fuente")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                
+                                HStack(spacing: 8) {
+                                    ForEach(FontStyle.allCases, id: \.self) { fontStyle in
+                                        Button(action: { selectedFont = fontStyle }) {
+                                            Text(fontStyle.displayName)
+                                                .font(.caption)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 6)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 6)
+                                                        .fill(selectedFont == fontStyle ? 
+                                                              AnyShapeStyle(LinearGradient(colors: [.orange, .pink], startPoint: .leading, endPoint: .trailing)) :
+                                                              AnyShapeStyle(Color.gray.opacity(0.2)))
+                                                )
+                                                .foregroundColor(selectedFont == fontStyle ? .white : .primary)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Vista previa del texto
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Vista previa")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                
+                                Text(content.isEmpty ? "Tu texto aparecerá aquí..." : content)
+                                    .applyStyle(isBold: isBold, isItalic: isItalic, fontStyle: selectedFont)
+                                    .lineLimit(2)
+                                    .padding(12)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(.regularMaterial)
+                                    )
+                            }
+                        }
+                        
                         // Campo de contenido
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
@@ -460,6 +664,7 @@ struct EditNoteView: View {
                             }
                             
                             TextField("Contenido de la nota", text: $content, axis: .vertical)
+                                .applyStyle(isBold: isBold, isItalic: isItalic, fontStyle: selectedFont)
                                 .lineLimit(6, reservesSpace: true)
                                 .padding(16)
                                 .background(
@@ -488,7 +693,14 @@ struct EditNoteView: View {
                 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Guardar") {
-                        viewModel.updateNote(id: note.id, newTitle: title, newContent: content)
+                        viewModel.updateNote(
+                            id: note.id, 
+                            newTitle: title, 
+                            newContent: content,
+                            isBold: isBold,
+                            isItalic: isItalic,
+                            fontStyle: selectedFont
+                        )
                         dismiss()
                     }
                     .disabled(title.isEmpty || content.isEmpty)
@@ -681,6 +893,48 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Font Extension
+extension FontStyle {
+    func font(size: CGFloat = 16) -> Font {
+        switch self {
+        case .system:
+            return .system(size: size)
+        case .serif:
+            return .custom("Times New Roman", size: size)
+        case .monospace:
+            return .custom("Courier", size: size)
+        case .rounded:
+            return .system(size: size, design: .rounded)
+        }
+    }
+}
+
+// MARK: - Text Styling Extensions
+extension Text {
+    func applyNoteStyle(isBold: Bool, isItalic: Bool, fontStyle: FontStyle, size: CGFloat = 16) -> Text {
+        var text = self.font(fontStyle.font(size: size))
+        
+        if isBold && isItalic {
+            text = text.fontWeight(.bold).italic()
+        } else if isBold {
+            text = text.fontWeight(.bold)
+        } else if isItalic {
+            text = text.italic()
+        }
+        
+        return text
+    }
+}
+
+extension View {
+    func applyStyle(isBold: Bool, isItalic: Bool, fontStyle: FontStyle, size: CGFloat = 16) -> some View {
+        self
+            .font(fontStyle.font(size: size))
+            .fontWeight(isBold ? .bold : .regular)
+            .italic(isItalic)
     }
 }
 
