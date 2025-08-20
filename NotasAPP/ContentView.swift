@@ -14,6 +14,8 @@ struct ContentView: View {
     @StateObject private var viewModel = NotesViewModel()
     @State private var showingAddNote = false
     @State private var selectedNote: Note?
+    @State private var showingSettings = false
+    @State private var settingsToggle = false
     
     var body: some View {
         NavigationStack {
@@ -27,20 +29,21 @@ struct ContentView: View {
                 .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
-                    // Header personalizado con título y botón
+                    // Header personalizado con título y botón de configuraciones
                     HStack {
-                        Text("✨ Mis Notas")
+                        Text("Mis Notas")
                             .font(.largeTitle)
                             .fontWeight(.bold)
                         
                         Spacer()
                         
-                        Button(action: { showingAddNote = true }) {
-                            Image(systemName: "plus.circle.fill")
+                        // Solo botón de configuraciones
+                        Button(action: { showingSettings = true }) {
+                            Image(systemName: "gearshape.fill")
                                 .font(.title2)
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: [.purple, .blue],
+                                        colors: [.orange, .red],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
@@ -78,6 +81,36 @@ struct ContentView: View {
                     }
                 }
             }
+            .overlay(
+                // Botón flotante para agregar nota
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        
+                        Button(action: { showingAddNote = true }) {
+                            Image(systemName: "plus")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.white)
+                                .frame(width: 56, height: 56)
+                                .background(
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [.purple, .blue],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .shadow(color: .purple.opacity(0.3), radius: 8, x: 0, y: 4)
+                                )
+                        }
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 30)
+                    }
+                }
+            )
 #if os(iOS)
             .navigationBarHidden(true)
 #else
@@ -88,6 +121,9 @@ struct ContentView: View {
             }
             .sheet(item: $selectedNote) { note in
                 EditNoteView(viewModel: viewModel, note: note)
+            }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView(settingsToggle: $settingsToggle)
             }
         }
     }
@@ -453,6 +489,94 @@ struct EditNoteView: View {
                     )
                     .foregroundColor(.white)
                     .fontWeight(.semibold)
+                }
+            }
+        }
+    }
+}
+
+struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var settingsToggle: Bool
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.gray.opacity(0.1), Color.black.opacity(0.1)]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+                
+                VStack(spacing: 24) {
+                    // Header con icono
+                    VStack(spacing: 12) {
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(
+                                LinearGradient(
+                                    colors: [.orange, .red],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 80, height: 80)
+                            .overlay {
+                                Image(systemName: "gearshape.fill")
+                                    .font(.system(size: 40))
+                                    .foregroundColor(.white)
+                            }
+                        
+                        Text("Configuraciones")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                    }
+                    .padding(.top, 20)
+                    
+                    // Sección de configuraciones
+                    VStack(spacing: 20) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: "lightbulb.fill")
+                                    .foregroundColor(.orange)
+                                Text("Configuración de Prueba")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                            }
+                            
+                            HStack {
+                                Text("Activar función de prueba")
+                                    .font(.body)
+                                    .foregroundColor(.secondary)
+                                
+                                Spacer()
+                                
+                                Toggle("", isOn: $settingsToggle)
+                                    .tint(.orange)
+                            }
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(.regularMaterial)
+                                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                            )
+                        }
+                    }
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 24)
+            }
+            .navigationTitle("⚙️ Configuraciones")
+#if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+#endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cerrar") {
+                        dismiss()
+                    }
+                    .foregroundColor(.red)
                 }
             }
         }
