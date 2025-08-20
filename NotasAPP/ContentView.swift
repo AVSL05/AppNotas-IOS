@@ -26,46 +26,63 @@ struct ContentView: View {
                 )
                 .ignoresSafeArea()
                 
-                ScrollView {
-                    LazyVStack(spacing: 16) {
-                        if viewModel.notes.isEmpty {
-                            EmptyStateView()
-                                .padding(.top, 50)
-                        } else {
-                            ForEach(viewModel.notes) { note in
-                                NoteCard(note: note) {
-                                    selectedNote = note
-                                }
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        if let index = viewModel.notes.firstIndex(where: { $0.id == note.id }) {
-                                            viewModel.deleteNote(at: IndexSet(integer: index))
+                VStack(spacing: 0) {
+                    // Header personalizado con título y botón
+                    HStack {
+                        Text("✨ Mis Notas")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                        
+                        Spacer()
+                        
+                        Button(action: { showingAddNote = true }) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.purple, .blue],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+                    .padding(.bottom, 20)
+                    
+                    // Contenido scrolleable
+                    ScrollView {
+                        LazyVStack(spacing: 16) {
+                            if viewModel.notes.isEmpty {
+                                EmptyStateView()
+                                    .padding(.top, 50)
+                            } else {
+                                ForEach(viewModel.notes) { note in
+                                    NoteCard(note: note) {
+                                        selectedNote = note
+                                    }
+                                    .contextMenu {
+                                        Button(role: .destructive) {
+                                            if let index = viewModel.notes.firstIndex(where: { $0.id == note.id }) {
+                                                viewModel.deleteNote(at: IndexSet(integer: index))
+                                            }
+                                        } label: {
+                                            Label("Eliminar", systemImage: "trash")
                                         }
-                                    } label: {
-                                        Label("Eliminar", systemImage: "trash")
                                     }
                                 }
                             }
                         }
+                        .padding(.horizontal, 20)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
                 }
             }
-            .navigationTitle("✨ Mis Notas")
-            .toolbar {
-                Button(action: { showingAddNote = true }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.purple, .blue],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
-            }
+#if os(iOS)
+            .navigationBarHidden(true)
+#else
+            .navigationTitle("")
+#endif
             .sheet(isPresented: $showingAddNote) {
                 AddNoteView(viewModel: viewModel)
             }

@@ -67,4 +67,4 @@ Creado por Angel Santana con ❤️
 
 ---
 
-*¿Te gusta la app? ¡Dale una ⭐ al repositorio!*
+_¿Te gusta la app? ¡Dale una ⭐ al repositorio!_
