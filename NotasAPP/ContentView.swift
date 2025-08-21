@@ -232,8 +232,8 @@ struct HorizontalReminderCard: View {
         VStack(alignment: .leading, spacing: 8) {
             // Encabezado con icono y título
             HStack(spacing: 6) {
-                Image(systemName: "bell.badge.fill")
-                    .foregroundColor(.orange)
+                Image(systemName: note.reminderPriority.iconName)
+                    .foregroundColor(Color(note.reminderPriority.color))
                     .font(.caption)
                 
                 Text(note.title.isEmpty ? "Sin título" : note.title)
@@ -283,8 +283,8 @@ struct ImprovedReminderCard: View {
         VStack(alignment: .leading, spacing: 8) {
             // Encabezado con icono y título
             HStack(spacing: 8) {
-                Image(systemName: "bell.badge.fill")
-                    .foregroundColor(.orange)
+                Image(systemName: note.reminderPriority.iconName)
+                    .foregroundColor(Color(note.reminderPriority.color))
                     .frame(width: 20)
                 
                 Text(note.title.isEmpty ? "Sin título" : note.title)
@@ -508,8 +508,8 @@ struct ReminderCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: "bell.badge.fill")
-                    .foregroundColor(.orange)
+                Image(systemName: note.reminderPriority.iconName)
+                    .foregroundColor(Color(note.reminderPriority.color))
                 Text(note.title)
                     .font(.headline)
                     .fontWeight(.semibold)
@@ -522,9 +522,9 @@ struct ReminderCard: View {
                         .padding(.vertical, 4)
                         .background(
                             Capsule()
-                                .fill(Color.orange.opacity(0.2))
+                                .fill(Color(note.reminderPriority.color).opacity(0.2))
                         )
-                        .foregroundColor(.orange)
+                        .foregroundColor(Color(note.reminderPriority.color))
                 }
             }
             
@@ -650,13 +650,13 @@ struct NoteCard: View {
                         // Indicador de recordatorio
                         if note.hasReminder && note.reminderEnabled {
                             HStack(spacing: 4) {
-                                Image(systemName: "bell.badge.fill")
+                                Image(systemName: note.reminderPriority.iconName)
                                     .font(.caption)
-                                    .foregroundColor(.orange)
+                                    .foregroundColor(Color(note.reminderPriority.color))
                                 if let reminderDate = note.reminderDate {
                                     Text(reminderDate, style: .time)
                                         .font(.caption2)
-                                        .foregroundColor(.orange)
+                                        .foregroundColor(Color(note.reminderPriority.color))
                                         .fontWeight(.medium)
                                 }
                             }
@@ -696,6 +696,7 @@ struct AddNoteView: View {
     @State private var selectedFont: FontStyle = .system
     @State private var hasReminder = false
     @State private var reminderDate = Date()
+    @State private var reminderPriority: ReminderPriority = .medium
     @State private var selectedCategory: NoteCategory = .general
     @State private var tags: [String] = []
     @State private var newTag = ""
@@ -982,6 +983,44 @@ struct AddNoteView: View {
                                     .datePickerStyle(.compact)
                                     .labelsHidden()
                                     
+                                    Text("Prioridad")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .padding(.top, 8)
+                                    
+                                    Menu {
+                                        ForEach(ReminderPriority.allCases, id: \.self) { priority in
+                                            Button(action: {
+                                                reminderPriority = priority
+                                            }) {
+                                                HStack {
+                                                    Image(systemName: priority.iconName)
+                                                    Text(priority.displayName)
+                                                    if reminderPriority == priority {
+                                                        Spacer()
+                                                        Image(systemName: "checkmark")
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: reminderPriority.iconName)
+                                                .foregroundColor(Color(reminderPriority.color))
+                                            Text(reminderPriority.displayName)
+                                                .foregroundColor(.primary)
+                                            Spacer()
+                                            Image(systemName: "chevron.down")
+                                                .foregroundColor(.secondary)
+                                                .font(.caption)
+                                        }
+                                        .padding(12)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(.secondary.opacity(0.3), lineWidth: 1)
+                                        )
+                                    }
+                                    
                                     HStack {
                                         Image(systemName: "info.circle.fill")
                                             .foregroundColor(.blue)
@@ -1032,6 +1071,7 @@ struct AddNoteView: View {
                             isItalic: isItalic,
                             fontStyle: selectedFont,
                             reminderDate: hasReminder ? reminderDate : nil,
+                            reminderPriority: reminderPriority,
                             category: selectedCategory,
                             tags: tags
                         )
@@ -1081,6 +1121,7 @@ struct EditNoteView: View {
     @State private var selectedFont: FontStyle
     @State private var hasReminder: Bool
     @State private var reminderDate: Date
+    @State private var reminderPriority: ReminderPriority
     @State private var selectedCategory: NoteCategory
     @State private var tags: [String]
     @State private var newTag = ""
@@ -1095,6 +1136,7 @@ struct EditNoteView: View {
         _selectedFont = State(initialValue: note.fontStyle)
         _hasReminder = State(initialValue: note.hasReminder)
         _reminderDate = State(initialValue: note.reminderDate ?? Date())
+        _reminderPriority = State(initialValue: note.reminderPriority)
         _selectedCategory = State(initialValue: note.category)
         _tags = State(initialValue: note.tags)
     }
@@ -1375,6 +1417,44 @@ struct EditNoteView: View {
                                 .datePickerStyle(.compact)
                                 .labelsHidden()
                                 
+                                Text("Prioridad")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .padding(.top, 8)
+                                
+                                Menu {
+                                    ForEach(ReminderPriority.allCases, id: \.self) { priority in
+                                        Button(action: {
+                                            reminderPriority = priority
+                                        }) {
+                                            HStack {
+                                                Image(systemName: priority.iconName)
+                                                Text(priority.displayName)
+                                                if reminderPriority == priority {
+                                                    Spacer()
+                                                    Image(systemName: "checkmark")
+                                                }
+                                            }
+                                        }
+                                    }
+                                } label: {
+                                    HStack {
+                                        Image(systemName: reminderPriority.iconName)
+                                            .foregroundColor(Color(reminderPriority.color))
+                                        Text(reminderPriority.displayName)
+                                            .foregroundColor(.primary)
+                                        Spacer()
+                                        Image(systemName: "chevron.down")
+                                            .foregroundColor(.secondary)
+                                            .font(.caption)
+                                    }
+                                    .padding(12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(.secondary.opacity(0.3), lineWidth: 1)
+                                    )
+                                }
+                                
                                 HStack {
                                     Image(systemName: "info.circle.fill")
                                         .foregroundColor(.blue)
@@ -1425,6 +1505,7 @@ struct EditNoteView: View {
                             fontStyle: selectedFont,
                             reminderDate: hasReminder ? reminderDate : nil,
                             reminderEnabled: hasReminder,
+                            reminderPriority: reminderPriority,
                             category: selectedCategory,
                             tags: tags
                         )

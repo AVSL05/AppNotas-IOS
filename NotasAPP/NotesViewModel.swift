@@ -81,20 +81,21 @@ class NotesViewModel: ObservableObject {
         selectedTags.removeAll()
     }
     
-    func addNote(title: String, content: String, isBold: Bool = false, isItalic: Bool = false, fontStyle: FontStyle = .system, reminderDate: Date? = nil, category: NoteCategory = .general, tags: [String] = []) {
+    func addNote(title: String, content: String, isBold: Bool = false, isItalic: Bool = false, fontStyle: FontStyle = .system, reminderDate: Date? = nil, reminderPriority: ReminderPriority = .medium, category: NoteCategory = .general, tags: [String] = []) {
         var newNote = Note(title: title, content: content, isBold: isBold, isItalic: isItalic, fontStyle: fontStyle, category: category, tags: tags)
         
         if let reminderDate = reminderDate {
             newNote.hasReminder = true
             newNote.reminderDate = reminderDate
             newNote.reminderEnabled = true
+            newNote.reminderPriority = reminderPriority
             scheduleNotification(for: newNote)
         }
         
         notes.append(newNote)
     }
     
-    func updateNote(id: UUID, newTitle: String, newContent: String, isBold: Bool? = nil, isItalic: Bool? = nil, fontStyle: FontStyle? = nil, reminderDate: Date? = nil, reminderEnabled: Bool? = nil, category: NoteCategory? = nil, tags: [String]? = nil) {
+    func updateNote(id: UUID, newTitle: String, newContent: String, isBold: Bool? = nil, isItalic: Bool? = nil, fontStyle: FontStyle? = nil, reminderDate: Date? = nil, reminderEnabled: Bool? = nil, reminderPriority: ReminderPriority? = nil, category: NoteCategory? = nil, tags: [String]? = nil) {
         if let index = notes.firstIndex(where: { $0.id == id }) {
             // Cancelar notificación anterior si existe
             if notes[index].hasReminder {
@@ -108,6 +109,7 @@ class NotesViewModel: ObservableObject {
             if let fontStyle = fontStyle { notes[index].fontStyle = fontStyle }
             if let category = category { notes[index].category = category }
             if let tags = tags { notes[index].tags = tags }
+            if let reminderPriority = reminderPriority { notes[index].reminderPriority = reminderPriority }
             
             // Actualizar recordatorio
             if let reminderDate = reminderDate {

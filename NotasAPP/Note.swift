@@ -11,6 +11,7 @@ struct Note: Identifiable, Codable {
     var hasReminder: Bool = false
     var reminderDate: Date?
     var reminderEnabled: Bool = false
+    var reminderPriority: ReminderPriority = .medium
     var category: NoteCategory = .general
     var tags: [String] = []
 }
@@ -23,6 +24,32 @@ enum FontStyle: String, CaseIterable, Codable {
     
     var displayName: String {
         return self.rawValue
+    }
+}
+
+enum ReminderPriority: String, CaseIterable, Codable {
+    case high = "Urgente"
+    case medium = "Media prioridad"
+    case low = "Baja prioridad"
+    
+    var displayName: String {
+        return self.rawValue
+    }
+    
+    var color: String {
+        switch self {
+        case .high: return "red"
+        case .medium: return "orange"
+        case .low: return "green"
+        }
+    }
+    
+    var iconName: String {
+        switch self {
+        case .high: return "exclamationmark.triangle.fill"
+        case .medium: return "exclamationmark.circle.fill"
+        case .low: return "minus.circle.fill"
+        }
     }
 }
 
