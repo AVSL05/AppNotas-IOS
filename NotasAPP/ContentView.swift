@@ -134,9 +134,9 @@ struct NotesListView: View {
                         ScrollView {
                             LazyVStack(spacing: 16) {
                                 ForEach(viewModel.filteredNotes) { note in
-                                    NoteCard(note: note) {
+                                    NoteCard(note: note, onTap: {
                                         selectedNote = note
-                                    }
+                                    }, viewModel: viewModel)
                                 }
                                 .onDelete { indexSet in
                                     // Convertir índices de filteredNotes a índices de notes
@@ -184,7 +184,7 @@ struct NotesListView: View {
                 }
             }
             .sheet(item: $selectedNote) { note in
-                EditNoteView(viewModel: viewModel, note: note)
+                ReadNoteView(viewModel: viewModel, note: note)
             }
         }
     }
@@ -392,7 +392,8 @@ struct CalendarView: View {
                             // Calendario personalizado con indicadores
                             CustomCalendarView(
                                 selectedDate: $selectedDate,
-                                datesWithReminders: getDatesWithReminders()
+                                datesWithReminders: getDatesWithReminders(),
+                                viewModel: viewModel
                             )
                         }
                         .frame(maxWidth: .infinity)
@@ -572,6 +573,7 @@ struct EmptyStateView: View {
 struct NoteCard: View {
     let note: Note
     let onTap: () -> Void
+    @ObservedObject var viewModel: NotesViewModel
     
     private var cardColors: [Color] {
         let colors = [
@@ -681,6 +683,32 @@ struct NoteCard: View {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Material.regularMaterial)
                     .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+            )
+            .overlay(
+                // Botón de borrar en esquina inferior derecha
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            if let index = viewModel.notes.firstIndex(where: { $0.id == note.id }) {
+                                viewModel.deleteNote(at: IndexSet(integer: index))
+                            }
+                        }) {
+                            Image(systemName: "trash.fill")
+                                .font(.caption)
+                                .foregroundColor(.white)
+                                .frame(width: 28, height: 28)
+                                .background(
+                                    Circle()
+                                        .fill(.red.gradient)
+                                        .shadow(color: .red.opacity(0.3), radius: 4, x: 0, y: 2)
+                                )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding(12)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -1542,6 +1570,207 @@ struct EditNoteView: View {
     }
 }
 
+// MARK: - Read Note View
+struct ReadNoteView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var viewModel: NotesViewModel
+    let note: Note
+    @State private var showingEditView = false
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Header con icono
+                        VStack(spacing: 12) {
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.blue, .purple],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 80, height: 80)
+                                .overlay {
+                                    Image(systemName: "doc.text.fill")
+                                        .font(.system(size: 40))
+                                        .foregroundColor(.white)
+                                }
+                            
+                            Text("Leer Nota")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                        }
+                        .padding(.top, 20)
+                        
+                        VStack(spacing: 20) {
+                            // Título de la nota
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Image(systemName: "textformat.size")
+                                        .foregroundColor(.blue)
+                                    Text("Título")
+                                        .font(.headline)
+                                        .fontWeight(.semibold)
+                                }
+                                
+                                Text(note.title.isEmpty ? "Sin título" : note.title)
+                                    .applyNoteStyle(isBold: note.isBold, isItalic: note.isItalic, fontStyle: note.fontStyle, size: 24)
+                                    .foregroundColor(.primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Material.regularMaterial)
+                                    )
+                            }
+                            
+                            // Contenido de la nota
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Image(systemName: "text.alignleft")
+                                        .foregroundColor(.blue)
+                                    Text("Contenido")
+                                        .font(.headline)
+                                        .fontWeight(.semibold)
+                                }
+                                
+                                Text(note.content.isEmpty ? "Sin contenido" : note.content)
+                                    .applyNoteStyle(isBold: note.isBold, isItalic: note.isItalic, fontStyle: note.fontStyle, size: 16)
+                                    .foregroundColor(.primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(16)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(Material.regularMaterial)
+                                    )
+                            }
+                            
+                            // Información adicional (solo si existe)
+                            VStack(alignment: .leading, spacing: 12) {
+                                // Categoría
+                                HStack {
+                                    Image(systemName: "folder.fill")
+                                        .foregroundColor(.orange)
+                                    Text("Categoría:")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    CategoryBadge(category: note.category)
+                                    Spacer()
+                                }
+                                
+                                // Tags (si existen)
+                                if !note.tags.isEmpty {
+                                    HStack {
+                                        Image(systemName: "tag.fill")
+                                            .foregroundColor(.green)
+                                        Text("Etiquetas:")
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                        Spacer()
+                                    }
+                                    
+                                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 8) {
+                                        ForEach(note.tags, id: \.self) { tag in
+                                            TagBadge(tag: tag)
+                                        }
+                                    }
+                                }
+                                
+                                // Recordatorio (si existe)
+                                if note.hasReminder && note.reminderEnabled, let reminderDate = note.reminderDate {
+                                    HStack {
+                                        Image(systemName: "bell.fill")
+                                            .foregroundColor(.red)
+                                        Text("Recordatorio:")
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                        
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(reminderDate, style: .date)
+                                                .font(.caption)
+                                                .fontWeight(.medium)
+                                            Text(reminderDate, style: .time)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        
+                                        Spacer()
+                                        
+                                        HStack(spacing: 4) {
+                                            Image(systemName: note.reminderPriority.iconName)
+                                                .font(.caption)
+                                                .foregroundColor(Color(note.reminderPriority.color))
+                                            Text(note.reminderPriority.displayName)
+                                                .font(.caption)
+                                                .foregroundColor(Color(note.reminderPriority.color))
+                                                .fontWeight(.medium)
+                                        }
+                                    }
+                                }
+                                
+                                // Fecha de creación
+                                HStack {
+                                    Image(systemName: "calendar")
+                                        .foregroundColor(.secondary)
+                                    Text("Creada el:")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    Text(note.date, style: .date)
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                }
+                            }
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Material.regularMaterial)
+                            )
+                        }
+                        .padding(.horizontal, 24)
+                        
+                        Spacer(minLength: 100)
+                    }
+                    .padding(.top, 20)
+                }
+            }
+            .navigationTitle("📖 Nota")
+#if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+#endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cerrar") {
+                        dismiss()
+                    }
+                    .foregroundColor(.secondary)
+                }
+                
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Editar") {
+                        showingEditView = true
+                    }
+                    .foregroundColor(.blue)
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+        .sheet(isPresented: $showingEditView) {
+            EditNoteView(viewModel: viewModel, note: note)
+        }
+    }
+}
+
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) var systemColorScheme
@@ -1762,6 +1991,7 @@ extension View {
 struct CustomCalendarView: View {
     @Binding var selectedDate: Date
     let datesWithReminders: Set<Date>
+    let viewModel: NotesViewModel
     @State private var currentMonth = Date()
     
     private var calendar: Calendar {
@@ -1825,6 +2055,9 @@ struct CustomCalendarView: View {
                         date: date,
                         selectedDate: $selectedDate,
                         hasReminder: hasReminder(for: date),
+                        priorityColor: getHighestPriorityColor(for: date),
+                        allPriorities: getAllPrioritiesForDate(date),
+                        totalReminders: getTotalRemindersForDate(date),
                         isCurrentMonth: calendar.isDate(date, equalTo: currentMonth, toGranularity: .month)
                     )
                 }
@@ -1835,12 +2068,31 @@ struct CustomCalendarView: View {
             HStack(spacing: 16) {
                 HStack(spacing: 4) {
                     Circle()
-                        .fill(.orange)
+                        .fill(.red)
                         .frame(width: 8, height: 8)
-                    Text("Con recordatorios")
+                    Text("Urgente")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
+                
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(.orange)
+                        .frame(width: 8, height: 8)
+                    Text("Media")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 8, height: 8)
+                    Text("Baja")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                
                 Spacer()
             }
             .padding(.horizontal)
@@ -1879,6 +2131,83 @@ struct CustomCalendarView: View {
         return datesWithReminders.contains(normalizedDate)
     }
     
+    private func getHighestPriorityColor(for date: Date) -> Color {
+        let calendar = Calendar.current
+        var highestPriority: ReminderPriority = .low
+        var hasAnyReminder = false
+        
+        for note in viewModel.notes {
+            guard note.hasReminder,
+                  note.reminderEnabled,
+                  let reminderDate = note.reminderDate else { continue }
+            
+            if calendar.isDate(reminderDate, inSameDayAs: date) {
+                hasAnyReminder = true
+                // Determinar prioridad más alta (high > medium > low)
+                if note.reminderPriority == .high {
+                    highestPriority = .high
+                    break // No hay prioridad más alta que urgente
+                } else if note.reminderPriority == .medium && highestPriority != .high {
+                    highestPriority = .medium
+                } else if highestPriority == .low {
+                    highestPriority = note.reminderPriority
+                }
+            }
+        }
+        
+        if hasAnyReminder {
+            switch highestPriority {
+            case .high: return .red
+            case .medium: return .orange
+            case .low: return .green
+            }
+        } else {
+            return .clear
+        }
+    }
+    
+    private func getAllPrioritiesForDate(_ date: Date) -> [ReminderPriority] {
+        let calendar = Calendar.current
+        var priorities: Set<ReminderPriority> = []
+        
+        for note in viewModel.notes {
+            guard note.hasReminder,
+                  note.reminderEnabled,
+                  let reminderDate = note.reminderDate else { continue }
+            
+            if calendar.isDate(reminderDate, inSameDayAs: date) {
+                priorities.insert(note.reminderPriority)
+            }
+        }
+        
+        // Ordenar por prioridad: high, medium, low
+        // Solo devolver tipos únicos (máximo 3 líneas: una por cada prioridad)
+        return priorities.sorted { priority1, priority2 in
+            switch (priority1, priority2) {
+            case (.high, _): return true
+            case (.medium, .low): return true
+            default: return false
+            }
+        }
+    }
+    
+    private func getTotalRemindersForDate(_ date: Date) -> Int {
+        let calendar = Calendar.current
+        var count = 0
+        
+        for note in viewModel.notes {
+            guard note.hasReminder,
+                  note.reminderEnabled,
+                  let reminderDate = note.reminderDate else { continue }
+            
+            if calendar.isDate(reminderDate, inSameDayAs: date) {
+                count += 1
+            }
+        }
+        
+        return count
+    }
+    
     private func previousMonth() {
         currentMonth = calendar.date(byAdding: .month, value: -1, to: currentMonth) ?? currentMonth
     }
@@ -1893,6 +2222,9 @@ struct DayView: View {
     let date: Date
     @Binding var selectedDate: Date
     let hasReminder: Bool
+    let priorityColor: Color
+    let allPriorities: [ReminderPriority]
+    let totalReminders: Int
     let isCurrentMonth: Bool
     
     private var calendar: Calendar {
@@ -1909,35 +2241,91 @@ struct DayView: View {
     
     var body: some View {
         ZStack {
-            // Fondo del día
+            // Recuadro del día (área clickeable completa)
             RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? .blue : .clear)
-                .frame(height: 40)
+                .fill(isSelected ? .blue : Color.secondary.opacity(0.1))
+                .stroke(isSelected ? .blue : .clear, lineWidth: 1)
+                .frame(height: 50)
             
-            VStack(spacing: 2) {
-                // Número del día
-                Text("\(calendar.component(.day, from: date))")
-                    .font(.system(size: 16, weight: isToday ? .bold : .medium))
-                    .foregroundColor(
-                        isSelected ? .white :
-                        isToday ? .blue :
-                        isCurrentMonth ? .primary : .secondary
-                    )
-                
-                // Indicador de recordatorio
-                if hasReminder {
-                    Circle()
-                        .fill(.orange)
-                        .frame(width: 6, height: 6)
-                } else {
-                    Circle()
-                        .fill(.clear)
-                        .frame(width: 6, height: 6)
+            // Número del día (centrado)
+            Text("\(calendar.component(.day, from: date))")
+                .font(.system(size: 16, weight: isToday ? .bold : .medium))
+                .foregroundColor(
+                    isSelected ? .white :
+                    isToday ? .blue :
+                    isCurrentMonth ? .primary : .secondary
+                )
+            
+            // Indicador de recordatorio en esquina superior derecha
+            if hasReminder {
+                VStack {
+                    HStack {
+                        Spacer()
+                        ZStack {
+                            if totalReminders > 1 {
+                                // Mostrar número cuando hay múltiples recordatorios
+                                Circle()
+                                    .fill(.white)
+                                    .frame(width: 16, height: 16)
+                                
+                                Circle()
+                                    .stroke(.black.opacity(0.2), lineWidth: 0.5)
+                                    .frame(width: 16, height: 16)
+                                
+                                Text("\(totalReminders)")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.black)
+                            } else {
+                                // Mostrar color cuando hay un solo recordatorio
+                                Circle()
+                                    .fill(.white)
+                                    .frame(width: 12, height: 12)
+                                
+                                Circle()
+                                    .fill(priorityColor)
+                                    .frame(width: 8, height: 8)
+                                
+                                Circle()
+                                    .stroke(.black.opacity(0.2), lineWidth: 0.5)
+                                    .frame(width: 12, height: 12)
+                            }
+                        }
+                        .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
+                    }
+                    Spacer()
                 }
+                .padding(.top, 3)
+                .padding(.trailing, 3)
+            }
+            
+            // Líneas de prioridad múltiples en la parte inferior
+            if hasReminder && !allPriorities.isEmpty {
+                VStack {
+                    Spacer()
+                    VStack(spacing: 1) {
+                        ForEach(Array(allPriorities.enumerated()), id: \.offset) { index, priority in
+                            Rectangle()
+                                .fill(colorForPriority(priority))
+                                .frame(height: 3)
+                                .cornerRadius(1.5)
+                        }
+                    }
+                }
+                .padding(.bottom, 2)
+                .padding(.horizontal, 4)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onTapGesture {
             selectedDate = date
+        }
+    }
+    
+    private func colorForPriority(_ priority: ReminderPriority) -> Color {
+        switch priority {
+        case .high: return .red
+        case .medium: return .orange
+        case .low: return .green
         }
     }
 }
