@@ -1953,6 +1953,60 @@ extension FontStyle {
             return .custom("Courier", size: size)
         case .rounded:
             return .system(size: size, design: .rounded)
+        case .comic:
+            return .custom("Comic Sans MS", size: size)
+        }
+    }
+    
+    // Función para obtener variantes con peso específico
+    func fontWithWeight(size: CGFloat = 16, weight: Font.Weight = .regular) -> Font {
+        switch self {
+        case .system:
+            return .system(size: size, weight: weight)
+        case .serif:
+            // Para Times New Roman, usar variantes específicas
+            let fontName = weight == .bold ? "TimesNewRomanPS-BoldMT" : "TimesNewRomanPSMT"
+            return .custom(fontName, size: size)
+        case .monospace:
+            // Para Courier, usar variantes específicas
+            let fontName = weight == .bold ? "Courier-Bold" : "Courier"
+            return .custom(fontName, size: size)
+        case .rounded:
+            return .system(size: size, weight: weight, design: .rounded)
+        case .comic:
+            // Para Comic Sans, usar variantes específicas
+            let fontName = weight == .bold ? "ComicSansMS-Bold" : "ComicSansMS"
+            return .custom(fontName, size: size)
+        }
+    }
+    
+    // Función para verificar si la fuente soporta cursiva nativa
+    var supportsItalic: Bool {
+        switch self {
+        case .system, .serif, .monospace:
+            return true
+        case .rounded, .comic:
+            return false // San Francisco Rounded y Comic Sans no tienen cursiva nativa
+        }
+    }
+    
+    // Función para obtener fuente con cursiva (usando alternativas cuando es necesario)
+    func fontWithItalic(size: CGFloat = 16, isBold: Bool = false) -> Font {
+        switch self {
+        case .system:
+            return isBold ? .system(size: size, weight: .bold).italic() : .system(size: size).italic()
+        case .serif:
+            let fontName = isBold ? "TimesNewRomanPS-BoldItalicMT" : "TimesNewRomanPS-ItalicMT"
+            return .custom(fontName, size: size)
+        case .monospace:
+            let fontName = isBold ? "Courier-BoldOblique" : "Courier-Oblique"
+            return .custom(fontName, size: size)
+        case .rounded:
+            // Para rounded, usar system italic como alternativa
+            return isBold ? .system(size: size, weight: .bold).italic() : .system(size: size).italic()
+        case .comic:
+            // Para comic sans, usar una fuente similar con cursiva como alternativa
+            return isBold ? .custom("MarkerFelt-Wide", size: size) : .custom("MarkerFelt-Thin", size: size)
         }
     }
 }
@@ -1960,14 +2014,15 @@ extension FontStyle {
 // MARK: - Text Styling Extensions
 extension Text {
     func applyNoteStyle(isBold: Bool, isItalic: Bool, fontStyle: FontStyle, size: CGFloat = 16) -> Text {
-        var text = self.font(fontStyle.font(size: size))
+        var text = self
         
-        if isBold && isItalic {
-            text = text.fontWeight(.bold).italic()
+        // Si necesita cursiva, usar la función especializada
+        if isItalic {
+            text = text.font(fontStyle.fontWithItalic(size: size, isBold: isBold))
         } else if isBold {
-            text = text.fontWeight(.bold)
-        } else if isItalic {
-            text = text.italic()
+            text = text.font(fontStyle.fontWithWeight(size: size, weight: .bold))
+        } else {
+            text = text.font(fontStyle.font(size: size))
         }
         
         return text
@@ -1975,11 +2030,21 @@ extension Text {
 }
 
 extension View {
-    func applyStyle(isBold: Bool, isItalic: Bool, fontStyle: FontStyle, size: CGFloat = 16) -> some View {
-        self
-            .font(fontStyle.font(size: size))
-            .fontWeight(isBold ? .bold : .regular)
-            .italic(isItalic)
+    func applyStyle(isBold: Bool, isItalic: Bool, fontStyle: FontStyle, size: CGFloat = 16) -> AnyView {
+        // Si necesita cursiva, usar la función especializada
+        if isItalic {
+            return AnyView(
+                self.font(fontStyle.fontWithItalic(size: size, isBold: isBold))
+            )
+        } else if isBold {
+            return AnyView(
+                self.font(fontStyle.fontWithWeight(size: size, weight: .bold))
+            )
+        } else {
+            return AnyView(
+                self.font(fontStyle.font(size: size))
+            )
+        }
     }
 }
 

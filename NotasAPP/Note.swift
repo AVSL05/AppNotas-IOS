@@ -21,6 +21,7 @@ enum FontStyle: String, CaseIterable, Codable {
     case serif = "Times New Roman" 
     case monospace = "Courier"
     case rounded = "San Francisco Rounded"
+    case comic = "Comic Sans MS"
     
     var displayName: String {
         return self.rawValue
