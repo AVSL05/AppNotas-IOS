@@ -2298,22 +2298,7 @@ struct DayView: View {
                 .padding(.trailing, 3)
             }
             
-            // Líneas de prioridad múltiples en la parte inferior
-            if hasReminder && !allPriorities.isEmpty {
-                VStack {
-                    Spacer()
-                    VStack(spacing: 1) {
-                        ForEach(Array(allPriorities.enumerated()), id: \.offset) { index, priority in
-                            Rectangle()
-                                .fill(colorForPriority(priority))
-                                .frame(height: 3)
-                                .cornerRadius(1.5)
-                        }
-                    }
-                }
-                .padding(.bottom, 2)
-                .padding(.horizontal, 4)
-            }
+
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onTapGesture {
